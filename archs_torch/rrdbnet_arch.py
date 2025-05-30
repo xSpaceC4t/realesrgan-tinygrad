@@ -20,6 +20,24 @@ def make_layer(basic_block, num_basic_block, **kwarg):
         layers.append(basic_block(**kwarg))
     return nn.Sequential(*layers)
 
+def pixel_unshuffle(x, scale):
+    """ Pixel unshuffle.
+
+    Args:
+        x (Tensor): Input feature with shape (b, c, hh, hw).
+        scale (int): Downsample ratio.
+
+    Returns:
+        Tensor: the pixel unshuffled feature.
+    """
+    b, c, hh, hw = x.size()
+    out_channel = c * (scale**2)
+    assert hh % scale == 0 and hw % scale == 0
+    h = hh // scale
+    w = hw // scale
+    x_view = x.view(b, c, h, scale, w, scale)
+    return x_view.permute(0, 1, 3, 5, 2, 4).reshape(b, out_channel, h, w)
+
 class ResidualDenseBlock(nn.Module):
     """Residual Dense Block.
 
@@ -117,12 +135,12 @@ class RRDBNet(nn.Module):
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
     def forward(self, x):
-        # if self.scale == 2:
-        #     feat = pixel_unshuffle(x, scale=2)
-        # elif self.scale == 1:
-        #     feat = pixel_unshuffle(x, scale=4)
-        # else:
-        feat = x
+        if self.scale == 2:
+            feat = pixel_unshuffle(x, scale=2)
+        elif self.scale == 1:
+            feat = pixel_unshuffle(x, scale=4)
+        else:
+            feat = x
         feat = self.conv_first(feat)
         body_feat = self.conv_body(self.body(feat))
         feat = feat + body_feat
