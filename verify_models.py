@@ -79,11 +79,27 @@ loadnet = torch.load(pth_path, map_location=torch.device('cpu'))
 model_torch.load_state_dict(loadnet['params'], strict=True)
 
 model_tinygrad = SRVGGNetCompactTinygrad(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=16, upscale=4, act_type='prelu')
-load_srvgg(model_tinygrad, pth_path)
+load_srvgg(model_tinygrad, pth_path, 16 * 2 + 3)
 
 out_torch = model_torch(torch.ones(1, 3, 32, 32))
 out_tinygrad = model_tinygrad(Tensor.ones(1, 3, 32, 32))
 
 print("realesr-animevideov3.pth:", np.allclose(out_tinygrad.numpy(), out_torch.detach().numpy(), atol=1e-5, rtol=1e-5))
+
+###
+
+pth_path = "weights/realesr-general-x4v3.pth"
+
+model_torch = SRVGGNetCompactTorch(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu')
+loadnet = torch.load(pth_path, map_location=torch.device('cpu'))
+model_torch.load_state_dict(loadnet['params'], strict=True)
+
+model_tinygrad = SRVGGNetCompactTinygrad(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu')
+load_srvgg(model_tinygrad, pth_path, 32 * 2 + 3)
+
+out_torch = model_torch(torch.ones(1, 3, 32, 32))
+out_tinygrad = model_tinygrad(Tensor.ones(1, 3, 32, 32))
+
+print("realesr-general-x4v3.pth", np.allclose(out_tinygrad.numpy(), out_torch.detach().numpy(), atol=1e-5, rtol=1e-5))
 
 ###

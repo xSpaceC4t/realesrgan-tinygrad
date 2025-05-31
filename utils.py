@@ -71,10 +71,10 @@ def load_rrdbnet(model, path, body_size):
     model.conv_last.weight = Tensor(loadnet['params_ema']['conv_last.weight'].numpy())
     model.conv_last.bias = Tensor(loadnet['params_ema']['conv_last.bias'].numpy())
 
-def load_srvgg(model, path):
+def load_srvgg(model, path, body_size):
     loadnet = torch.load(path, map_location=torch.device('cpu'))
     
-    for i in range(35):
+    for i in range(body_size):
         model.body[i].weight = Tensor(loadnet['params'][f'body.{i}.weight'].numpy())
         if i % 2 == 0:
             model.body[i].bias = Tensor(loadnet['params'][f'body.{i}.bias'].numpy())
