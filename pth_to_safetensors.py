@@ -8,7 +8,7 @@ import torch
 from tinygrad import Tensor, nn
 import numpy as np
 from tinygrad.nn.state import safe_save, safe_load, get_state_dict, load_state_dict
-from utils import *
+from weights_utils import *
 from safetensors.torch import save_model
 
 ###
