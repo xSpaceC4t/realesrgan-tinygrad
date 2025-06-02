@@ -12,7 +12,6 @@ import os
 from archs_tinygrad.rrdbnet_arch import RRDBNet
 from archs_tinygrad.srvgg_arch import SRVGGNetCompact
 from utils import *
-from weights_utils import *
 from tinygrad.nn.state import safe_save, safe_load, get_state_dict, load_state_dict
 
 def main():
