@@ -4,9 +4,9 @@ import numpy as np
 import os
 import queue
 import threading
-import torch
-from basicsr.utils.download_util import load_file_from_url
-from torch.nn import functional as F
+# import torch
+# from basicsr.utils.download_util import load_file_from_url
+# from torch.nn import functional as F
 from tinygrad import nn, Tensor, TinyJit
 from itertools import product
 from tqdm import tqdm
@@ -52,11 +52,11 @@ class RealESRGANer():
         self.half = half
 
         # initialize model
-        if gpu_id:
-            self.device = torch.device(
-                f'cuda:{gpu_id}' if torch.cuda.is_available() else 'cpu') if device is None else device
-        else:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if device is None else device
+        # if gpu_id:
+        #     self.device = torch.device(
+        #         f'cuda:{gpu_id}' if torch.cuda.is_available() else 'cpu') if device is None else device
+        # else:
+        #     self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if device is None else device
 
         # if isinstance(model_path, list):
         #     # dni
@@ -82,48 +82,58 @@ class RealESRGANer():
         #     self.model = self.model.half()
         self.model = model
 
-    def dni(self, net_a, net_b, dni_weight, key='params', loc='cpu'):
-        """Deep network interpolation.
+    # def dni(self, net_a, net_b, dni_weight, key='params', loc='cpu'):
+    #     """Deep network interpolation.
 
-        ``Paper: Deep Network Interpolation for Continuous Imagery Effect Transition``
-        """
-        net_a = torch.load(net_a, map_location=torch.device(loc))
-        net_b = torch.load(net_b, map_location=torch.device(loc))
-        for k, v_a in net_a[key].items():
-            net_a[key][k] = dni_weight[0] * v_a + dni_weight[1] * net_b[key][k]
-        return net_a
+    #     ``Paper: Deep Network Interpolation for Continuous Imagery Effect Transition``
+    #     """
+    #     net_a = torch.load(net_a, map_location=torch.device(loc))
+    #     net_b = torch.load(net_b, map_location=torch.device(loc))
+    #     for k, v_a in net_a[key].items():
+    #         net_a[key][k] = dni_weight[0] * v_a + dni_weight[1] * net_b[key][k]
+    #     return net_a
 
     def pre_process(self, img):
         """Pre-process, such as pre-pad and mod pad, so that the images can be divisible
         """
-        img = torch.from_numpy(np.transpose(img, (2, 0, 1))).float()
-        self.img = img.unsqueeze(0).to(self.device)
-        if self.half:
-            self.img = self.img.half()
+        # img = torch.from_numpy(np.transpose(img, (2, 0, 1))).float()
+        # self.img = img.unsqueeze(0).to(self.device)
+        img = np.transpose(img, (2, 0, 1))
+        self.img = np.expand_dims(img, axis=0)
+
+        # if self.half:
+        #     self.img = self.img.half()
 
         # pre_pad
-        if self.pre_pad != 0:
-            self.img = F.pad(self.img, (0, self.pre_pad, 0, self.pre_pad), 'reflect')
-        # mod pad for divisible borders
-        if self.scale == 2:
-            self.mod_scale = 2
-        elif self.scale == 1:
-            self.mod_scale = 4
-        if self.mod_scale is not None:
-            self.mod_pad_h, self.mod_pad_w = 0, 0
-            _, _, h, w = self.img.size()
-            if (h % self.mod_scale != 0):
-                self.mod_pad_h = (self.mod_scale - h % self.mod_scale)
-            if (w % self.mod_scale != 0):
-                self.mod_pad_w = (self.mod_scale - w % self.mod_scale)
-            self.img = F.pad(self.img, (0, self.mod_pad_w, 0, self.mod_pad_h), 'reflect')
+        # if self.pre_pad != 0:
+        #     self.img = F.pad(self.img, (0, self.pre_pad, 0, self.pre_pad), 'reflect')
+        #     print("test")
+        # # mod pad for divisible borders
+        # if self.scale == 2:
+        #     self.mod_scale = 2
+        #     print("test")
+        # elif self.scale == 1:
+        #     self.mod_scale = 4
+        #     print("test")
+        # if self.mod_scale is not None:
+        #     self.mod_pad_h, self.mod_pad_w = 0, 0
+        #     _, _, h, w = self.img.size()
+        #     if (h % self.mod_scale != 0):
+        #         self.mod_pad_h = (self.mod_scale - h % self.mod_scale)
+        #     if (w % self.mod_scale != 0):
+        #         self.mod_pad_w = (self.mod_scale - w % self.mod_scale)
+        #     self.img = F.pad(self.img, (0, self.mod_pad_w, 0, self.mod_pad_h), 'reflect')
+        #     print("test")
 
     def process(self):
         # model inference
         # self.output = self.model(self.img)
-        x = Tensor(self.img.cpu().numpy())
-        self.output = forward_jit(self.model, x)
-        self.output = torch.tensor(self.output.numpy()).cuda()
+
+        # x = Tensor(self.img.cpu().numpy())
+        # self.output = forward_jit(self.model, x)
+        # self.output = torch.tensor(self.output.numpy()).cuda()
+
+        self.output = forward_jit(self.model, Tensor(self.img)).numpy()
 
     def tile_process(self):
         """It will first crop input images to tiles, and then process each tile.
@@ -137,7 +147,9 @@ class RealESRGANer():
         output_shape = (batch, channel, output_height, output_width)
 
         # start with black image
-        self.output = self.img.new_zeros(output_shape)
+        # self.output = self.img.new_zeros(output_shape)
+        self.output = np.zeros(output_shape)
+
         tiles_x = math.ceil(width / self.tile_size)
         tiles_y = math.ceil(height / self.tile_size)
 
@@ -178,11 +190,17 @@ class RealESRGANer():
 
                 # upscale tile
                 try:
-                    with torch.no_grad():
+                    # with torch.no_grad():
                         # output_tile = self.model(input_tile)
-                        input_tile = Tensor(input_tile.cpu().numpy())
-                        output_tile = forward_jit(self.model, input_tile)
-                        output_tile = torch.tensor(output_tile.numpy()).cuda()
+
+                        # input_tile = Tensor(input_tile.cpu().numpy())
+                        # output_tile = forward_jit(self.model, input_tile)
+                        # output_tile = torch.tensor(output_tile.numpy()).cuda()
+
+                        input_tile = Tensor(input_tile)
+                        output_tile = forward_jit(self.model, input_tile).numpy()
+                        # output_tile = torch.tensor(output_tile.numpy()).cuda()
+
                 except RuntimeError as error:
                     print('Error', error)
                 # print(f'\tTile {tile_idx}/{tiles_x * tiles_y}')
@@ -215,7 +233,7 @@ class RealESRGANer():
             self.output = self.output[:, :, 0:h - self.pre_pad * self.scale, 0:w - self.pre_pad * self.scale]
         return self.output
 
-    @torch.no_grad()
+    # @torch.no_grad()
     def enhance(self, img, outscale=None, alpha_upsampler='realesrgan'):
         h_input, w_input = img.shape[0:2]
         # img: numpy
@@ -247,8 +265,14 @@ class RealESRGANer():
         else:
             self.process()
         output_img = self.post_process()
-        output_img = output_img.data.squeeze().float().cpu().clamp_(0, 1).numpy()
+
+        # output_img = torch.tensor(output_img)
+        # output_img = output_img.data.squeeze().float().cpu().clamp_(0, 1).numpy()
+
+        output_img = np.squeeze(output_img, axis=0).astype(np.float32)
+        output_img = np.clip(output_img, 0, 1)
         output_img = np.transpose(output_img[[2, 1, 0], :, :], (1, 2, 0))
+
         if img_mode == 'L':
             output_img = cv2.cvtColor(output_img, cv2.COLOR_BGR2GRAY)
 
