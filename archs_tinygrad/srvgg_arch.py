@@ -14,8 +14,9 @@ def pixel_shuffle(x, upscale_factor):
     return x
 
 class PRelu:
-    def __init__(self):
-        self.weight = None
+    def __init__(self, num_parameters):
+        # self.weight = None
+        self.weight = Tensor.ones(num_parameters)
 
     def __call__(self, x):
         # return (x > 0).where(x, x * self.weight)
@@ -49,8 +50,8 @@ class SRVGGNetCompact:
         # self.body.append(nn.Conv2d(num_in_ch, num_feat, 3, 1, 1))
         # the first activation
         self.body = [nn.Conv2d(num_in_ch, num_feat, 3, 1, 1)] # + prelu
-        # activation = PRelu(num_parameters=num_feat)
-        activation = PRelu()
+        activation = PRelu(num_parameters=num_feat)
+        # activation = PRelu()
         self.body.append(activation)
 
         # if act_type == 'relu':
@@ -71,8 +72,8 @@ class SRVGGNetCompact:
             #     activation = nn.PReLU(num_parameters=num_feat)
             # elif act_type == 'leakyrelu':
             #     activation = nn.LeakyReLU(negative_slope=0.1, inplace=True)
-            # activation = PRelu(num_parameters=num_feat)
-            activation = PRelu()
+            activation = PRelu(num_parameters=num_feat)
+            # activation = PRelu()
             self.body.append(activation)
 
         # the last conv
