@@ -120,7 +120,10 @@ class RealESRGANer():
 
     def process(self):
         # model inference
-        self.output = self.model(self.img)
+        # self.output = self.model(self.img)
+        x = Tensor(self.img.cpu().numpy())
+        self.output = forward_jit(self.model, x)
+        self.output = torch.tensor(self.output.numpy()).cuda()
 
     def tile_process(self):
         """It will first crop input images to tiles, and then process each tile.
