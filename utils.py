@@ -4,17 +4,11 @@ import numpy as np
 import os
 import queue
 import threading
-# import torch
-# from basicsr.utils.download_util import load_file_from_url
-# from torch.nn import functional as F
 from tinygrad import nn, Tensor, TinyJit
 from itertools import product
 from tqdm import tqdm
 
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 @TinyJit
-@Tensor.test()
 def forward_jit(model, x):
     return model(x)
 
@@ -50,89 +44,15 @@ class RealESRGANer():
         self.pre_pad = pre_pad
         self.mod_scale = None
         self.half = half
-
-        # initialize model
-        # if gpu_id:
-        #     self.device = torch.device(
-        #         f'cuda:{gpu_id}' if torch.cuda.is_available() else 'cpu') if device is None else device
-        # else:
-        #     self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if device is None else device
-
-        # if isinstance(model_path, list):
-        #     # dni
-        #     assert len(model_path) == len(dni_weight), 'model_path and dni_weight should have the save length.'
-        #     loadnet = self.dni(model_path[0], model_path[1], dni_weight)
-        # else:
-        #     # if the model_path starts with https, it will first download models to the folder: weights
-        #     if model_path.startswith('https://'):
-        #         model_path = load_file_from_url(
-        #             url=model_path, model_dir=os.path.join(ROOT_DIR, 'weights'), progress=True, file_name=None)
-        #     loadnet = torch.load(model_path, map_location=torch.device('cpu'))
-
-        # # prefer to use params_ema
-        # if 'params_ema' in loadnet:
-        #     keyname = 'params_ema'
-        # else:
-        #     keyname = 'params'
-        # model.load_state_dict(loadnet[keyname], strict=True)
-
-        # model.eval()
-        # self.model = model.to(self.device)
-        # if self.half:
-        #     self.model = self.model.half()
         self.model = model
-
-    # def dni(self, net_a, net_b, dni_weight, key='params', loc='cpu'):
-    #     """Deep network interpolation.
-
-    #     ``Paper: Deep Network Interpolation for Continuous Imagery Effect Transition``
-    #     """
-    #     net_a = torch.load(net_a, map_location=torch.device(loc))
-    #     net_b = torch.load(net_b, map_location=torch.device(loc))
-    #     for k, v_a in net_a[key].items():
-    #         net_a[key][k] = dni_weight[0] * v_a + dni_weight[1] * net_b[key][k]
-    #     return net_a
 
     def pre_process(self, img):
         """Pre-process, such as pre-pad and mod pad, so that the images can be divisible
         """
-        # img = torch.from_numpy(np.transpose(img, (2, 0, 1))).float()
-        # self.img = img.unsqueeze(0).to(self.device)
         img = np.transpose(img, (2, 0, 1))
         self.img = np.expand_dims(img, axis=0)
 
-        # if self.half:
-        #     self.img = self.img.half()
-
-        # pre_pad
-        # if self.pre_pad != 0:
-        #     self.img = F.pad(self.img, (0, self.pre_pad, 0, self.pre_pad), 'reflect')
-        #     print("test")
-        # # mod pad for divisible borders
-        # if self.scale == 2:
-        #     self.mod_scale = 2
-        #     print("test")
-        # elif self.scale == 1:
-        #     self.mod_scale = 4
-        #     print("test")
-        # if self.mod_scale is not None:
-        #     self.mod_pad_h, self.mod_pad_w = 0, 0
-        #     _, _, h, w = self.img.size()
-        #     if (h % self.mod_scale != 0):
-        #         self.mod_pad_h = (self.mod_scale - h % self.mod_scale)
-        #     if (w % self.mod_scale != 0):
-        #         self.mod_pad_w = (self.mod_scale - w % self.mod_scale)
-        #     self.img = F.pad(self.img, (0, self.mod_pad_w, 0, self.mod_pad_h), 'reflect')
-        #     print("test")
-
     def process(self):
-        # model inference
-        # self.output = self.model(self.img)
-
-        # x = Tensor(self.img.cpu().numpy())
-        # self.output = forward_jit(self.model, x)
-        # self.output = torch.tensor(self.output.numpy()).cuda()
-
         self.output = forward_jit(self.model, Tensor(self.img)).numpy()
 
     def tile_process(self):
@@ -147,80 +67,69 @@ class RealESRGANer():
         output_shape = (batch, channel, output_height, output_width)
 
         # start with black image
-        # self.output = self.img.new_zeros(output_shape)
         self.output = np.zeros(output_shape)
 
         tiles_x = math.ceil(width / self.tile_size)
         tiles_y = math.ceil(height / self.tile_size)
 
         # loop over all tiles
-        # for y in range(tiles_y):
-        #     for x in range(tiles_x):
         for y, x in tqdm(product(range(tiles_y), range(tiles_x)), total=tiles_y * tiles_x):
-                # extract tile from input image
-                ofs_x = x * self.tile_size
-                ofs_y = y * self.tile_size
-                # input tile area on total image
-                input_start_x = ofs_x
-                input_end_x = min(ofs_x + self.tile_size, width)
-                input_start_y = ofs_y
-                input_end_y = min(ofs_y + self.tile_size, height)
 
-                # input tile area on total image with padding
-                input_start_x_pad = max(input_start_x - self.tile_pad, 0)
-                input_end_x_pad = min(input_end_x + self.tile_pad, width)
-                input_start_y_pad = max(input_start_y - self.tile_pad, 0)
-                input_end_y_pad = min(input_end_y + self.tile_pad, height)
+            # extract tile from input image
+            ofs_x = x * self.tile_size
+            ofs_y = y * self.tile_size
 
-                # input tile dimensions
-                input_tile_width = input_end_x - input_start_x
-                input_tile_height = input_end_y - input_start_y
-                tile_idx = y * tiles_x + x + 1
+            # input tile area on total image
+            input_start_x = ofs_x
+            input_end_x = min(ofs_x + self.tile_size, width)
+            input_start_y = ofs_y
+            input_end_y = min(ofs_y + self.tile_size, height)
 
-                if x == 0:
-                    input_end_x_pad += self.tile_pad
-                if y == 0:
-                    input_end_y_pad += self.tile_pad
-                if x == tiles_x - 1:
-                    input_start_x_pad = width - (self.tile_size + 2 * self.tile_pad)
-                if y == tiles_y - 1:
-                    input_start_y_pad = height - (self.tile_size + 2 * self.tile_pad)
+            # input tile area on total image with padding
+            input_start_x_pad = max(input_start_x - self.tile_pad, 0)
+            input_end_x_pad = min(input_end_x + self.tile_pad, width)
+            input_start_y_pad = max(input_start_y - self.tile_pad, 0)
+            input_end_y_pad = min(input_end_y + self.tile_pad, height)
 
-                input_tile = self.img[:, :, input_start_y_pad:input_end_y_pad, input_start_x_pad:input_end_x_pad]
+            # input tile dimensions
+            input_tile_width = input_end_x - input_start_x
+            input_tile_height = input_end_y - input_start_y
+            tile_idx = y * tiles_x + x + 1
 
-                # upscale tile
-                try:
-                    # with torch.no_grad():
-                        # output_tile = self.model(input_tile)
+            if x == 0:
+                input_end_x_pad += self.tile_pad
+            if y == 0:
+                input_end_y_pad += self.tile_pad
+            if x == tiles_x - 1:
+                input_start_x_pad = width - (self.tile_size + 2 * self.tile_pad)
+            if y == tiles_y - 1:
+                input_start_y_pad = height - (self.tile_size + 2 * self.tile_pad)
 
-                        # input_tile = Tensor(input_tile.cpu().numpy())
-                        # output_tile = forward_jit(self.model, input_tile)
-                        # output_tile = torch.tensor(output_tile.numpy()).cuda()
+            input_tile = self.img[:, :, input_start_y_pad:input_end_y_pad, input_start_x_pad:input_end_x_pad]
 
-                        input_tile = Tensor(input_tile)
-                        output_tile = forward_jit(self.model, input_tile).numpy()
-                        # output_tile = torch.tensor(output_tile.numpy()).cuda()
+            # upscale tile
+            try:
+                input_tile = Tensor(input_tile)
+                output_tile = forward_jit(self.model, input_tile).numpy()
+            except RuntimeError as error:
+                print('Error', error)
 
-                except RuntimeError as error:
-                    print('Error', error)
-                # print(f'\tTile {tile_idx}/{tiles_x * tiles_y}')
+            # output tile area on total image
+            output_start_x = input_start_x * self.scale
+            output_end_x = input_end_x * self.scale
+            output_start_y = input_start_y * self.scale
+            output_end_y = input_end_y * self.scale
 
-                # output tile area on total image
-                output_start_x = input_start_x * self.scale
-                output_end_x = input_end_x * self.scale
-                output_start_y = input_start_y * self.scale
-                output_end_y = input_end_y * self.scale
+            # output tile area without padding
+            output_start_x_tile = (input_start_x - input_start_x_pad) * self.scale
+            output_end_x_tile = output_start_x_tile + input_tile_width * self.scale
+            output_start_y_tile = (input_start_y - input_start_y_pad) * self.scale
+            output_end_y_tile = output_start_y_tile + input_tile_height * self.scale
 
-                # output tile area without padding
-                output_start_x_tile = (input_start_x - input_start_x_pad) * self.scale
-                output_end_x_tile = output_start_x_tile + input_tile_width * self.scale
-                output_start_y_tile = (input_start_y - input_start_y_pad) * self.scale
-                output_end_y_tile = output_start_y_tile + input_tile_height * self.scale
-
-                # put tile into output image
-                self.output[:, :, output_start_y:output_end_y,
-                            output_start_x:output_end_x] = output_tile[:, :, output_start_y_tile:output_end_y_tile,
-                                                                       output_start_x_tile:output_end_x_tile]
+            # put tile into output image
+            self.output[:, :, output_start_y:output_end_y,
+                        output_start_x:output_end_x] = output_tile[:, :, output_start_y_tile:output_end_y_tile,
+                                                                    output_start_x_tile:output_end_x_tile]
 
     def post_process(self):
         # remove extra pad
@@ -233,7 +142,6 @@ class RealESRGANer():
             self.output = self.output[:, :, 0:h - self.pre_pad * self.scale, 0:w - self.pre_pad * self.scale]
         return self.output
 
-    # @torch.no_grad()
     def enhance(self, img, outscale=None, alpha_upsampler='realesrgan'):
         h_input, w_input = img.shape[0:2]
         # img: numpy
@@ -265,9 +173,6 @@ class RealESRGANer():
         else:
             self.process()
         output_img = self.post_process()
-
-        # output_img = torch.tensor(output_img)
-        # output_img = output_img.data.squeeze().float().cpu().clamp_(0, 1).numpy()
 
         output_img = np.squeeze(output_img, axis=0).astype(np.float32)
         output_img = np.clip(output_img, 0, 1)
