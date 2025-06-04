@@ -1,6 +1,5 @@
 from tinygrad import nn, Tensor
 
-# def PRelu(X:Tensor, slope:Tensor): return (X > 0).where(X, X * slope)
 
 def pixel_shuffle(x, upscale_factor):
     batch_size, channels, height, width = x.shape
@@ -15,11 +14,9 @@ def pixel_shuffle(x, upscale_factor):
 
 class PRelu:
     def __init__(self, num_parameters):
-        # self.weight = None
         self.weight = Tensor.ones(num_parameters)
 
     def __call__(self, x):
-        # return (x > 0).where(x, x * self.weight)
         return x.relu() + self.weight.reshape(1, -1, 1, 1) * x.neg().relu().neg()
 
 class SRVGGNetCompact:
@@ -45,41 +42,19 @@ class SRVGGNetCompact:
         self.upscale = upscale
         self.act_type = act_type
 
-        # self.body = nn.ModuleList()
-        # the first conv
-        # self.body.append(nn.Conv2d(num_in_ch, num_feat, 3, 1, 1))
-        # the first activation
         self.body = [nn.Conv2d(num_in_ch, num_feat, 3, 1, 1)] # + prelu
         activation = PRelu(num_parameters=num_feat)
-        # activation = PRelu()
         self.body.append(activation)
-
-        # if act_type == 'relu':
-        #     activation = nn.ReLU(inplace=True)
-        # elif act_type == 'prelu':
-        #     activation = nn.PReLU(num_parameters=num_feat)
-        # elif act_type == 'leakyrelu':
-        #     activation = nn.LeakyReLU(negative_slope=0.1, inplace=True)
-        # self.body.append(activation)
 
         # the body structure
         for _ in range(num_conv):
             self.body.append(nn.Conv2d(num_feat, num_feat, 3, 1, 1))
             # activation
-            # if act_type == 'relu':
-            #     activation = nn.ReLU(inplace=True)
-            # elif act_type == 'prelu':
-            #     activation = nn.PReLU(num_parameters=num_feat)
-            # elif act_type == 'leakyrelu':
-            #     activation = nn.LeakyReLU(negative_slope=0.1, inplace=True)
             activation = PRelu(num_parameters=num_feat)
-            # activation = PRelu()
             self.body.append(activation)
 
         # the last conv
         self.body.append(nn.Conv2d(num_feat, num_out_ch * upscale * upscale, 3, 1, 1))
-        # upsample
-        # self.upsampler = nn.PixelShuffle(upscale)
 
     def __call__(self, x):
         out = x

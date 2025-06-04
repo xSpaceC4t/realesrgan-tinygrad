@@ -8,6 +8,7 @@ from tinygrad import nn, Tensor, TinyJit
 from itertools import product
 from tqdm import tqdm
 
+
 @TinyJit
 def forward_jit(model, x):
     return model(x)

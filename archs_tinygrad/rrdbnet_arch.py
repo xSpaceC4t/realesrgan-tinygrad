@@ -1,22 +1,5 @@
 from tinygrad import nn
 
-def pixel_unshuffle(x, scale):
-    """ Pixel unshuffle.
-
-    Args:
-        x (Tensor): Input feature with shape (b, c, hh, hw).
-        scale (int): Downsample ratio.
-
-    Returns:
-        Tensor: the pixel unshuffled feature.
-    """
-    b, c, hh, hw = x.size()
-    out_channel = c * (scale**2)
-    assert hh % scale == 0 and hw % scale == 0
-    h = hh // scale
-    w = hw // scale
-    x_view = x.view(b, c, h, scale, w, scale)
-    return x_view.permute(0, 1, 3, 5, 2, 4).reshape(b, out_channel, h, w)
 
 class ResidualDenseBlock:
     """Residual Dense Block.
@@ -88,11 +71,6 @@ class RRDBNet:
     """
 
     def __init__(self, num_in_ch, num_out_ch, scale=4, num_feat=64, num_block=23, num_grow_ch=32):
-        self.scale = scale
-        if scale == 2:
-            num_in_ch = num_in_ch * 4
-        elif scale == 1:
-            num_in_ch = num_in_ch * 16
         self.conv_first = nn.Conv2d(num_in_ch, num_feat, 3, 1, 1)
         self.body = [RRDB(num_feat=num_feat, num_grow_ch=num_grow_ch) for _ in range(num_block)]
         self.conv_body = nn.Conv2d(num_feat, num_feat, 3, 1, 1)
@@ -103,13 +81,7 @@ class RRDBNet:
         self.conv_last = nn.Conv2d(num_feat, num_out_ch, 3, 1, 1)
 
     def __call__(self, x):
-        if self.scale == 2:
-            feat = pixel_unshuffle(x, scale=2)
-        elif self.scale == 1:
-            feat = pixel_unshuffle(x, scale=4)
-        else:
-            feat = x
-        feat = self.conv_first(feat)
+        feat = self.conv_first(x)
         body_feat = self.conv_body(feat.sequential(self.body))
         feat = feat + body_feat
 
