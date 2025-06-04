@@ -87,7 +87,7 @@ def main():
         model_path=None,
         dni_weight=None,
         model=model,
-        tile=args.tile,
+        tile=args.tile - (args.tile_pad * 2),
         tile_pad=args.tile_pad,
         pre_pad=args.pre_pad,
         half=False,
