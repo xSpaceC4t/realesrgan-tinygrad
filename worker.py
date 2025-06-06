@@ -15,6 +15,7 @@ from tinygrad import Tensor, TinyJit
 from net_utils import *
 
 model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu')
+load_state_dict(model, safe_load(f'weights/realesr-general-x4v3.safetensors'))
 
 @TinyJit
 def forward_jit(x):
