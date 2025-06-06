@@ -136,6 +136,7 @@ async def background_job(input_path, output_path):
         print('Testing', idx, imgname)
 
         img = cv2.imread(path, cv2.IMREAD_COLOR)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         # img = cv2.imread('image.jpg', cv2.IMREAD_COLOR)
 
         img = img.astype(np.float32) / 255.0
@@ -181,7 +182,7 @@ async def background_job(input_path, output_path):
         cv2.imwrite(save_path, output)
 
 async def main():
-    input_dir = 'frames'
+    input_dir = 'inputs'
     output_dir = 'results'
 
     bg_task = asyncio.create_task(background_job(input_dir, output_dir))
