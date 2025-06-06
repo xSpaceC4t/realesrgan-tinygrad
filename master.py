@@ -156,8 +156,6 @@ async def background_job(input_path, output_path):
         total = tiles_x * tiles_y
 
         global progress_bar
-        if progress_bar:
-            progress_bar.close()
         progress_bar = tqdm(total=total, unit="it")
 
         for y in range(tiles_y):
@@ -169,6 +167,7 @@ async def background_job(input_path, output_path):
             done_task = await done_tasks.get() 
             finish_task(done_task, output)
             total -= 1
+        progress_bar.close()
 
         output_img = np.squeeze(output, axis=0).astype(np.float32)
         output_img = np.clip(output_img, 0, 1)
