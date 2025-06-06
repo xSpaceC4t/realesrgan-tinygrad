@@ -17,8 +17,7 @@ import random
 from collections import deque
 import time
 
-# tasks = asyncio.Queue()
-tasks = deque()
+tasks = asyncio.Queue()
 done_tiles = 0
 lock = asyncio.Lock()
 progress_bar = tqdm(total=100, unit="it")
@@ -29,10 +28,7 @@ async def handle_echo(reader, writer):
     print(f"Connection from {addr}")
 
     while True:
-        async with lock:
-            if not tasks:
-                break
-            curr_task = tasks.popleft()
+        curr_task = await tasks.get()
 
         x = np.random.rand(1, 3, 128, 128).astype(np.float32)
         obj = pickle.dumps(x)
@@ -48,7 +44,7 @@ async def handle_echo(reader, writer):
 
         except:
             print('error occured')
-            tasks.appendleft(curr_task)
+            await tasks.put(curr_task)
             print('restoring:', curr_task)
             break
 
@@ -56,7 +52,7 @@ async def handle_echo(reader, writer):
     writer.close()
 
 async def background_job():
-    img = cv2.imread(cv2.IMREAD_COLOR)
+    img = cv2.imread('image.jpg', cv2.IMREAD_COLOR)
 
     img = img.astype(np.float32) / 255.0
     img = np.transpose(img, (2, 0, 1))
@@ -70,7 +66,7 @@ async def background_job():
 
 async def main():
     for i in range(1000):
-        tasks.append(i)
+        await tasks.put(i)
     print(tasks)
 
     bg_task = asyncio.create_task(background_job())
