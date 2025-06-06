@@ -21,7 +21,6 @@ tasks = asyncio.Queue()
 done_tasks = asyncio.Queue()
 done_tiles = 0
 lock = asyncio.Lock()
-# progress_bar = tqdm(total=100, unit="it")
 progress_bar = None
 
 async def handle_echo(reader, writer):
@@ -49,12 +48,12 @@ async def handle_echo(reader, writer):
                 progress_bar.update(1)
 
         except:
-            print('error occured')
+            print('Error occured!')
+            print('Restoring task:', curr_task)
             await tasks.put((x, curr_task[1], curr_task[2]))
-            print('restoring:', curr_task)
             break
 
-    print("Close the connection")
+    print(f"Close the connection {addr}")
     writer.close()
 
 def get_task(img, x, y, tile_size=128, tile_pad=10):
@@ -124,44 +123,68 @@ def finish_task(done_task, output, tile_size=128, tile_pad=10, scale=4):
                 output_start_x:output_end_x] = output_tile[:, :, output_start_y_tile:output_end_y_tile,
                                                             output_start_x_tile:output_end_x_tile] 
 
-async def background_job():
-    img = cv2.imread('image.jpg', cv2.IMREAD_COLOR)
-    img = img.astype(np.float32) / 255.0
-    img = np.transpose(img, (2, 0, 1))
-    img = np.expand_dims(img, axis=0)
+async def background_job(input_path, output_path):
+    os.makedirs(output_path, exist_ok=True)
 
-    tile_pad = 10
-    tile_size = 128 - (tile_pad * 2)
-    _, _, height, width = img.shape
-    output = np.zeros((1, 3, height * 4, width * 4)).astype(np.float32)
+    if os.path.isfile(input_path):
+        paths = [input_path]
+    else:
+        paths = sorted(glob.glob(os.path.join(input_path, '*')))
 
-    tiles_x = math.ceil(width / tile_size)
-    tiles_y = math.ceil(height / tile_size)
-    total = tiles_x * tiles_y
+    for idx, path in enumerate(paths):
+        imgname, extension = os.path.splitext(os.path.basename(path))
+        print('Testing', idx, imgname)
 
-    global progress_bar
-    progress_bar = tqdm(total=total, unit="it")
+        img = cv2.imread(path, cv2.IMREAD_COLOR)
+        # img = cv2.imread('image.jpg', cv2.IMREAD_COLOR)
 
-    for y in range(tiles_y):
-        for x in range(tiles_x):
-            await tasks.put(get_task(img, x, y))
-    await tasks.put(None)
+        img = img.astype(np.float32) / 255.0
+        img = np.transpose(img, (2, 0, 1))
+        img = np.expand_dims(img, axis=0)
 
-    while total:
-        done_task = await done_tasks.get() 
-        finish_task(done_task, output)
-        total -= 1
+        global done_tiles
+        done_tiles = 0
 
-    output_img = np.squeeze(output, axis=0).astype(np.float32)
-    output_img = np.clip(output_img, 0, 1)
-    output_img = np.transpose(output_img[[2, 1, 0], :, :], (1, 2, 0))
-    output = (output_img * 255.0).round().astype(np.uint8)
+        tile_pad = 10
+        tile_size = 128 - (tile_pad * 2)
+        _, _, height, width = img.shape
+        output = np.zeros((1, 3, height * 4, width * 4)).astype(np.float32)
 
-    cv2.imwrite('output.jpg', output)
-    print('done')
+        tiles_x = math.ceil(width / tile_size)
+        tiles_y = math.ceil(height / tile_size)
+        total = tiles_x * tiles_y
+
+        global progress_bar
+        if progress_bar:
+            progress_bar.close()
+        progress_bar = tqdm(total=total, unit="it")
+
+        for y in range(tiles_y):
+            for x in range(tiles_x):
+                await tasks.put(get_task(img, x, y))
+        # await tasks.put(None)
+
+        while total:
+            done_task = await done_tasks.get() 
+            finish_task(done_task, output)
+            total -= 1
+
+        output_img = np.squeeze(output, axis=0).astype(np.float32)
+        output_img = np.clip(output_img, 0, 1)
+        output_img = np.transpose(output_img[[2, 1, 0], :, :], (1, 2, 0))
+        output = (output_img * 255.0).round().astype(np.uint8)
+
+        extension = extension[1:]
+        suffix = 'out'
+
+        save_path = os.path.join(output_path, f'{imgname}_{suffix}.{extension}')
+        cv2.imwrite(save_path, output)
 
 async def main():
-    bg_task = asyncio.create_task(background_job())
+    input_dir = 'frames'
+    output_dir = 'results'
+
+    bg_task = asyncio.create_task(background_job(input_dir, output_dir))
 
     server = await asyncio.start_server(
         handle_echo, '0.0.0.0', 8888)
