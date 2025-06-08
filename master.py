@@ -16,6 +16,7 @@ from tqdm import tqdm
 import random
 from collections import deque
 import time
+import argparse
 
 tasks = asyncio.Queue()
 done_tasks = asyncio.Queue()
@@ -23,10 +24,16 @@ done_tiles = 0
 lock = asyncio.Lock()
 progress_bar = None
 
-async def handle_echo(reader, writer):
+async def handle_echo(reader, writer, model_name):
     global done_tiles
     addr = writer.get_extra_info('peername')
     print(f"Connection from {addr}")
+
+    await send_tile(writer, model_name.encode())
+    # writer.write(len(model_name).to_bytes(4, byteorder='big'))
+    # await writer.drain()
+    # writer.write(model_name.encode())
+    # await writer.drain()
 
     while True:
         curr_task = await tasks.get()
@@ -50,7 +57,7 @@ async def handle_echo(reader, writer):
         except:
             print('Error occured!')
             print('Restoring task:', curr_task)
-            await tasks.put((x, curr_task[1], curr_task[2]))
+            await tasks.put((curr_task[0], curr_task[1], curr_task[2]))
             break
 
     print(f"Close the connection {addr}")
@@ -181,13 +188,61 @@ async def background_job(input_path, output_path):
         cv2.imwrite(save_path, output)
 
 async def main():
-    input_dir = 'inputs'
-    output_dir = 'results'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input', type=str, default='inputs', help='Input image or folder')
+    parser.add_argument(
+        '-n',
+        '--model_name',
+        type=str,
+        default='RealESRGAN_x4plus',
+        help=('Model names: RealESRGAN_x4plus | RealESRNet_x4plus | RealESRGAN_x4plus_anime_6B | RealESRGAN_x2plus | '
+              'realesr-animevideov3 | realesr-general-x4v3'))
+    parser.add_argument('-o', '--output', type=str, default='results', help='Output folder')
+    parser.add_argument(
+        '-dn',
+        '--denoise_strength',
+        type=float,
+        default=0.5,
+        help=('Denoise strength. 0 for weak denoise (keep noise), 1 for strong denoise ability. '
+              'Only used for the realesr-general-x4v3 model'))
+    parser.add_argument('-s', '--outscale', type=float, default=4, help='The final upsampling scale of the image')
+    parser.add_argument(
+        '--model_path', type=str, default=None, help='[Option] Model path. Usually, you do not need to specify it')
+    parser.add_argument('--suffix', type=str, default='out', help='Suffix of the restored image')
+    parser.add_argument('-t', '--tile', type=int, default=0, help='Tile size, 0 for no tile during testing')
+    parser.add_argument('--tile_pad', type=int, default=10, help='Tile padding')
+    parser.add_argument('--pre_pad', type=int, default=0, help='Pre padding size at each border')
+    parser.add_argument('--face_enhance', action='store_true', help='Use GFPGAN to enhance face')
+    parser.add_argument(
+        '--fp32', action='store_true', help='Use fp32 precision during inference. Default: fp16 (half precision).')
+    parser.add_argument(
+        '--alpha_upsampler',
+        type=str,
+        default='realesrgan',
+        help='The upsampler for the alpha channels. Options: realesrgan | bicubic')
+    parser.add_argument(
+        '--ext',
+        type=str,
+        default='auto',
+        help='Image extension. Options: auto | jpg | png, auto means using the same extension as inputs')
+    parser.add_argument(
+        '-g', '--gpu-id', type=int, default=None, help='gpu device to use (default=None) can be 0,1,2 for multi-gpu')
+    parser.add_argument('-a', '--address', type=str, default='127.0.0.1')
+    parser.add_argument('-p', '--port', type=str, default='8888')
 
-    bg_task = asyncio.create_task(background_job(input_dir, output_dir))
+    args = parser.parse_args()
+
+    # input_dir = 'frames'
+    # output_dir = 'results'
+
+    args.model_name = args.model_name.split('.')[0]
+
+    bg_task = asyncio.create_task(background_job(args.input, args.output))
 
     server = await asyncio.start_server(
-        handle_echo, '0.0.0.0', 8888)
+        lambda r, w: handle_echo(r, w, args.model_name),
+        # handle_echo, 
+        args.address, args.port)
     addr = server.sockets[0].getsockname()
     print(f'Serving on {addr}')
     async with server:
